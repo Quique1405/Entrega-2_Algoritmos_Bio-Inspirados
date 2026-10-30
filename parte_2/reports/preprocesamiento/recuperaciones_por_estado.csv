@@ -1,0 +1,5 @@
+loan_status,creditos,con_recuperacion,recuperacion_media,fraccion_con_recuperacion
+Charged Off,45248,24187,890.8051561490843,0.5345429632248939
+Default,1219,0,0.0,0.0
+Does not meet the credit policy. Status:Charged Off,761,490,579.0020466881341,0.6438896189224704
+Late (31-120 days),11591,0,0.0,0.0

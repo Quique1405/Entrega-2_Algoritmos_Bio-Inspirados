@@ -1,0 +1,199 @@
+# =============================================================================
+# PARTE 2 - PÉRDIDA DADO INCUMPLIMIENTO (LGD)
+# Configuración del preprocesamiento
+# =============================================================================
+#
+# Uso (desde la carpeta parte_2/):
+#   python -m src.preprocesamiento --config configs/lgd.yaml
+#
+# Cualquier valor de este archivo se puede cambiar sin editarlo:
+#   python -m src.preprocesamiento --config configs/lgd.yaml \
+#       --set particion.fin_entrenamiento=2012-12-31
+#
+# Las rutas son relativas a la carpeta desde donde se ejecuta el comando
+# (parte_2/). Los datos crudos y el diccionario de variables están en la raíz
+# del repositorio porque los comparten las dos partes del trabajo.
+#
+# Fuente de los datos: Credit Risk Analysis (Kaggle, usuario ranadeep),
+# archivo loan.csv con créditos de consumo de Lending Club.
+#   - 887 379 créditos y 74 columnas.
+#   - Fecha de originación (issue_d) entre 2007-06 y 2015-12.
+# Significado de las columnas: ../data/LCDataDictionary.xlsx (hoja LoanStats).
+# =============================================================================
+
+semilla: 2026   # se usa solo en el modo demostración (--muestra) para el muestreo
+
+rutas:
+  datos_crudos: ../data/raw/loan.csv
+  salida: data/processed              # lgd_{entrenamiento,validacion,prueba}.parquet,
+                                      # preprocesador.joblib y metadatos.json
+  reportes: reports/preprocesamiento  # tablas de verificación en CSV
+
+
+# -----------------------------------------------------------------------------
+# VARIABLE OBJETIVO
+# -----------------------------------------------------------------------------
+# Desenlace del crédito según loan_status, con la codificación del enunciado:
+#   malo (1)  -> estados_malos
+#   bueno (0) -> estados_buenos
+#   sin desenlace conocido (NA): Current, Issued, In Grace Period,
+#     Late (16-30 days). No se usan para ajustar nada.
+#
+# El LGD se construye solo con estados_lgd (créditos castigados, "charged
+# off": declarados incobrables y enviados a cobranza). Motivo: las
+# recuperaciones (recoveries) se registran después del castigo. Los créditos
+# en Default o Late (31-120 days) son malos para el modelo de PD, pero aún no
+# tienen proceso de cobro y su LGD saldría artificialmente cercano a 1.
+# Evidencia: reports/preprocesamiento/recuperaciones_por_estado.csv
+# (fracción de créditos con recoveries > 0 por estado).
+#
+# Fórmula (campos y definiciones del diccionario de variables):
+#
+#   EAD_default = funded_amnt - total_rec_prncp
+#   LGD         = 1 - (recoveries - collection_recovery_fee) / EAD_default
+#
+#   funded_amnt             "total amount committed to that loan": lo que se
+#                           desembolsó. Se prefiere a loan_amnt (lo solicitado)
+#                           y a funded_amnt_inv (solo la parte de los
+#                           inversionistas).
+#   total_rec_prncp         "principal received to date": capital devuelto
+#                           antes del incumplimiento. Solo capital, sin intereses.
+#   recoveries              "post charge off gross recovery".
+#   collection_recovery_fee "post charge off collection fee": se resta porque
+#                           ese dinero lo retiene la agencia de cobranza.
+#
+# No se usa out_prncp (saldo pendiente) como denominador: vale 0 después del
+# castigo.
+#
+# Limitaciones conocidas:
+#   - No hay fechas de recuperación: no se puede descontar en el tiempo.
+#   - No se incluyen intereses no cobrados ni costos internos de cobranza.
+#   - Los castigos recientes pueden no haber terminado su cobranza, lo que
+#     infla su LGD (afecta sobre todo a créditos de 2014 y 2015).
+#
+# Resultado de la corrida completa: 46 009 castigados, ninguno descartado;
+# 38 casos con LGD < 0 antes de recortar y ninguno > 1; media 0.930,
+# mediana 0.981.
+objetivo:
+  estados_malos:
+    - Charged Off
+    - Default
+    - Late (31-120 days)
+    - "Does not meet the credit policy. Status:Charged Off"
+  estados_buenos:
+    - Fully Paid
+    - "Does not meet the credit policy. Status:Fully Paid"
+  estados_lgd:
+    - Charged Off
+    - "Does not meet the credit policy. Status:Charged Off"
+  recortar_lgd: [0.0, 1.0]   # el LGD es una fracción; los valores fuera de
+                             # rango se llevan al extremo más cercano
+
+
+# -----------------------------------------------------------------------------
+# PARTICIÓN TEMPORAL
+# -----------------------------------------------------------------------------
+# Por fecha de originación (issue_d), fechas inclusivas:
+#   entrenamiento: issue_d <= fin_entrenamiento
+#   validación:    fin_entrenamiento < issue_d <= fin_validacion
+#   prueba:        issue_d > fin_validacion
+#
+# Simula el uso real: el modelo aprende de créditos antiguos y se evalúa en
+# créditos posteriores. La misma partición aplica a PD y LGD, para que la
+# pérdida esperada E[L] = PD * LGD * EAD combine predicciones del mismo
+# crédito en el mismo conjunto.
+#
+# ESTADO: provisional. Con estos cortes, los castigados quedan
+# 29 255 / 13 981 / 2 773 (64 % / 30 % / 6 %). Prueba queda pequeña y
+# posiblemente sesgada: en 2015 casi todos los créditos seguían vigentes y los
+# pocos castigados son los que fallaron muy rápido. Pendiente de revisión con
+# reports/preprocesamiento/conteos_por_anio.csv.
+particion:
+  fin_entrenamiento: "2013-12-31"   # entre comillas: sin ellas YAML lo
+  fin_validacion: "2014-12-31"      # convierte en objeto fecha
+
+
+# -----------------------------------------------------------------------------
+# VARIABLES DE ENTRADA
+# -----------------------------------------------------------------------------
+# Caso de uso: la pérdida esperada se estima al momento de aprobar el crédito.
+# Por eso solo entran variables conocidas en la solicitud o la aprobación.
+# Son las mismas para PD y LGD.
+#
+# grade e int_rate son asignadas por el propio modelo de riesgo de Lending
+# Club. Se incluyen bajo el supuesto de que se evalúa un crédito ya tarificado
+# (con grado y tasa asignados). Si el caso de uso es decidir sin esa
+# información, deben retirarse.
+variables:
+  numericas:
+    - loan_amnt
+    - funded_amnt
+    - int_rate
+    - installment
+    - annual_inc
+    - dti
+    - delinq_2yrs
+    - inq_last_6mths
+    - open_acc
+    - pub_rec
+    - revol_bal
+    - revol_util
+    - total_acc
+    # Derivadas, calculadas en src/preprocesamiento.py:
+    - plazo_meses              # de term (" 36 months" -> 36)
+    - antiguedad_empleo        # de emp_length ("< 1 year" -> 0,
+                               # "10+ years" -> 10, "n/a" -> faltante).
+                               # El diccionario la describe como número de 0 a
+                               # 10, pero en el archivo viene como texto.
+    - meses_historial_credito  # meses entre earliest_cr_line e issue_d
+  categoricas:
+    - grade
+    - home_ownership
+    - verification_status
+    - purpose
+    - initial_list_status
+
+# Columnas que solo se conocen después de otorgar el crédito (pagos,
+# recuperaciones, fechas de pago). Usarlas como entrada sería fuga de
+# información. El código se detiene si alguna aparece en las variables de
+# entrada o en las columnas de las que salen las variables derivadas.
+# Algunas sí se usan, pero solo para construir el LGD y la EAD.
+prohibidas:
+  - loan_status
+  - out_prncp
+  - out_prncp_inv
+  - total_pymnt
+  - total_pymnt_inv
+  - total_rec_prncp
+  - total_rec_int
+  - total_rec_late_fee
+  - recoveries
+  - collection_recovery_fee
+  - last_pymnt_d
+  - last_pymnt_amnt
+  - next_pymnt_d
+  - last_credit_pull_d
+
+
+# -----------------------------------------------------------------------------
+# PREPROCESAMIENTO
+# -----------------------------------------------------------------------------
+# Los parámetros (medianas, medias, desviaciones estándar, categorías
+# frecuentes) se ajustan con TODOS los créditos de entrenamiento con desenlace
+# conocido (buenos y malos; 163 541 en la corrida completa), no solo con los
+# castigados. Así PD y LGD comparten exactamente la misma transformación de
+# cada crédito. Validación y prueba nunca intervienen en el ajuste.
+#
+# El preprocesador ajustado se guarda en data/processed/preprocesador.joblib
+# para transformar créditos nuevos (por ejemplo, en la aplicación web).
+preprocesamiento:
+  imputacion_numerica: median   # median | mean. La mediana es robusta a los
+                                # valores extremos de annual_inc y revol_bal.
+  indicador_faltante: true      # agrega una columna 0/1 por cada variable que
+                                # tenía faltantes en entrenamiento
+  escalado: estandar            # estandar: media 0 y desviación estándar 1
+                                # minmax_pm1: rango [-1, 1], como en los
+                                # notebooks del curso
+  categoria_frecuencia_minima: 0.005  # categorías con menos del 0.5 % de los
+                                      # créditos se agrupan en una sola
+                                      # ("infrequent")
