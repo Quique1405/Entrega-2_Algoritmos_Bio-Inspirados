@@ -1,0 +1,19 @@
+{
+  "configuraciones_entrenadas": 40,
+  "segundos_totales": 256.88550380000015,
+  "metrica_seleccion": "val_rmse",
+  "mejor": {
+    "capas_ocultas": [
+      64,
+      32,
+      16
+    ],
+    "activacion": "tanh",
+    "dropout": 0.1,
+    "perdida": "bce",
+    "optimizador": "adam",
+    "tasa_aprendizaje": 0.003653690755840811,
+    "penalizacion_l2": 2.8916133878424343e-05,
+    "tamano_lote": 128
+  }
+}

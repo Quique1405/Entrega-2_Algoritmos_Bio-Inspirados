@@ -20,10 +20,18 @@ Este documento recoge las decisiones tomadas hasta ahora. Las que afectan a las 
 ├── data/
 │   ├── LCDataDictionary.xlsx     # diccionario de variables (hoja LoanStats)
 │   └── raw/loan.csv              # NO está en el repositorio: se descarga de Kaggle
+├── intercambio/                  # comunicación entre las partes 1 y 2
+│   ├── LEEME.md                  # formato del archivo de PD
+│   └── pd_prueba.csv             # PD de cada crédito de prueba (la escribe la parte 1)
 └── parte_2/                      # LGD
     ├── configs/lgd.yaml          # todas las decisiones del preprocesamiento, comentadas
     ├── src/preprocesamiento.py
-    ├── data/processed/           # salidas del preprocesamiento (sí están en el repositorio)
+    ├── src/referencia_lgd.py     # línea base (modelo nulo) y regresión lineal
+    ├── src/red_lgd.py            # perceptrón multicapa: búsqueda, semillas, entrenamiento
+    ├── src/pd_provisional.py     # PD provisional mientras la parte 1 no entrega la suya
+    ├── src/perdida_esperada.py   # E[L] = PD * LGD * EAD con la PD del archivo de intercambio
+    ├── data/processed/           # salidas del preprocesamiento (los poblacion_*.parquet
+    │                             # no se suben: se regeneran con el preprocesamiento)
     └── reports/preprocesamiento/ # tablas de verificación en CSV
 ```
 
@@ -41,6 +49,23 @@ Los datos crudos y el diccionario están en la raíz porque los usan las dos par
    cd parte_2
    python -m src.preprocesamiento --config configs/lgd.yaml
    ```
+4. Ajustar la línea base y la regresión lineal, también desde `parte_2/`:
+   ```bash
+   python -m src.referencia_lgd --config configs/lgd.yaml
+   ```
+   Resultados en `parte_2/results/referencia/` (métricas, calibración, modelos guardados) y figuras en `parte_2/figures/referencia/`.
+5. Red neuronal, también desde `parte_2/`, en este orden:
+   ```bash
+   python -m src.red_lgd --config configs/lgd.yaml --modo busqueda   # búsqueda aleatoria de hiperparámetros
+   python -m src.red_lgd --config configs/lgd.yaml --modo semillas   # mejor configuración con 30 semillas
+   ```
+   Para una prueba rápida de una sola configuración: `--modo entrenar`. Para una demostración de menos de 2 minutos, agregar `--demo` a cualquier modo. Resultados en `parte_2/results/red/` y figuras en `parte_2/figures/red/`.
+6. Pérdida esperada, también desde `parte_2/`:
+   ```bash
+   python -m src.pd_provisional --config configs/lgd.yaml     # solo mientras no exista la PD de la parte 1
+   python -m src.perdida_esperada --config configs/lgd.yaml
+   ```
+   Cuando la parte 1 sobrescriba `intercambio/pd_prueba.csv`, basta repetir la segunda línea. Resultados en `parte_2/results/perdida_esperada/`.
 
 Cualquier parámetro de la configuración se puede cambiar sin editar archivos:
 
@@ -141,7 +166,11 @@ El preprocesador ajustado está en `parte_2/data/processed/preprocesador.joblib`
 
 ### Intercambio de resultados
 
-Para calcular la pérdida esperada, la parte 2 necesita la PD de cada crédito castigado de prueba. Propuesta de formato: un archivo CSV con columnas `id` y `pd`. La columna `id` es el identificador original del crédito en `loan.csv`.
+La pérdida esperada se calcula al momento de aprobar, cuando no se sabe si el crédito va a incumplir. Por eso la parte 2 necesita la PD de **todos los créditos de prueba con desenlace conocido** (buenos y malos), no solo de los castigados. El formato está en [`intercambio/LEEME.md`](intercambio/LEEME.md): un CSV `intercambio/pd_prueba.csv` con columnas `id`, `pd` y, opcionalmente, `modelo`.
+
+Para entrenar el modelo de PD con exactamente el mismo preprocesamiento, el preprocesamiento genera `parte_2/data/processed/poblacion_{entrenamiento,validacion,prueba}.parquet`: todos los créditos con desenlace conocido, ya transformados, con la variable objetivo `malo`. Las columnas están descritas en el mismo `LEEME.md`.
+
+Mientras la parte 1 no entregue su PD, el archivo tiene una PD **provisional** (regresión logística), marcada con `modelo = provisional_regresion_logistica`.
 
 ---
 
@@ -204,9 +233,11 @@ Fuente: `parte_2/reports/preprocesamiento/recuperaciones_por_estado.csv`.
    - MAE y RMSE, con 30 semillas para la red;
    - comparación de la distribución de las predicciones con la observada;
    - calibración por deciles.
-5. **Pérdida esperada:** con la PD de la parte 1. Para la EAD hay dos opciones en estudio:
-   - el monto desembolsado `funded_amnt`, que es conservadora;
-   - ese monto multiplicado por la fracción promedio de capital pendiente al incumplir, estimada en entrenamiento.
+5. **Pérdida esperada:** con la PD de la parte 1, sobre todos los créditos de prueba con desenlace conocido. Reglas de EAD disponibles (`perdida_esperada.ead` en `lgd.yaml`):
+   - `monto`: el monto desembolsado `funded_amnt`. Supone incumplimiento inmediato y sobreestima la pérdida.
+   - `fraccion_pendiente` (por defecto): ese monto multiplicado por la fracción promedio del monto que seguía pendiente al incumplir, estimada en los castigados de entrenamiento y separada por plazo. Es coherente con la definición del LGD.
+
+   La pérdida observada se reporta como un rango: los castigados aportan su pérdida real; los créditos en `Default` o `Late (31-120 days)` no tienen cobranza registrada, así que la cota superior supone que pierden toda su deuda pendiente.
 
 ---
 
@@ -214,7 +245,8 @@ Fuente: `parte_2/reports/preprocesamiento/recuperaciones_por_estado.csv`.
 
 - [x] Fijar las fechas de corte de la partición temporal.
 - [ ] Confirmar si `grade` e `int_rate` se mantienen como variables de entrada.
-- [ ] Acordar el archivo de intercambio de PD (`id`, `pd`).
+- [x] Definir el archivo de intercambio de PD (`intercambio/LEEME.md`).
+- [ ] La parte 1 sobrescribe `intercambio/pd_prueba.csv` con su PD real.
 
 ## Nota sobre Git
 

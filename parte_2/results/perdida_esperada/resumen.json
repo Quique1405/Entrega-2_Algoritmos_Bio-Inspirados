@@ -1,0 +1,21 @@
+{
+  "modelo_pd": "provisional_regresion_logistica",
+  "pd_es_provisional": true,
+  "modelo_lgd": "red",
+  "ead": {
+    "regla": "fraccion_pendiente",
+    "fraccion_por_plazo": {
+      "36": 0.6009662727277486,
+      "60": 0.7491055026117542,
+      "todos": 0.6492432850881719
+    }
+  },
+  "creditos_prueba": 74154,
+  "monto_prestado": 1061569725.0,
+  "perdida_esperada_total": 141208623.92933866,
+  "perdida_observada_min": 168195585.75869992,
+  "perdida_observada_max": 229530554.81869996,
+  "pd_media": 0.19646966375380964,
+  "tasa_malos_real": 0.26217061790328233,
+  "lgd_predicho_medio": 0.9226088099906876
+}

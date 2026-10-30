@@ -1,5 +1,5 @@
 {
-  "creado_utc": "2026-10-30T05:17:17+00:00",
+  "creado_utc": "2026-10-30T22:28:01+00:00",
   "muestra": null,
   "filas_leidas": 887379,
   "filas_ajuste_preprocesador": 90347,
@@ -32,6 +32,23 @@
     "prueba": {
       "ruta": "data\\processed\\lgd_prueba.parquet",
       "filas": 13981
+    }
+  },
+  "poblacion": {
+    "entrenamiento": {
+      "ruta": "data\\processed\\poblacion_entrenamiento.parquet",
+      "filas": 90347,
+      "malos": 14729
+    },
+    "validacion": {
+      "ruta": "data\\processed\\poblacion_validacion.parquet",
+      "filas": 73194,
+      "malos": 16798
+    },
+    "prueba": {
+      "ruta": "data\\processed\\poblacion_prueba.parquet",
+      "filas": 74154,
+      "malos": 19441
     }
   },
   "variables_transformadas": [
@@ -170,6 +187,131 @@
       "indicador_faltante": true,
       "escalado": "estandar",
       "categoria_frecuencia_minima": 0.005
+    },
+    "referencia": {
+      "resultados": "results/referencia",
+      "figuras": "figures/referencia",
+      "conjuntos_figuras": [
+        "validacion",
+        "prueba"
+      ],
+      "recortar_prediccion_lineal": false
+    },
+    "red": {
+      "resultados": "results/red",
+      "figuras": "figures/red",
+      "conjuntos_figuras": [
+        "validacion",
+        "prueba"
+      ],
+      "metrica_seleccion": "rmse",
+      "entrenar": {
+        "semilla": 2026,
+        "capas_ocultas": [
+          64,
+          32
+        ],
+        "activacion": "relu",
+        "dropout": 0.1,
+        "perdida": "bce",
+        "optimizador": "adam",
+        "tasa_aprendizaje": 0.001,
+        "penalizacion_l2": 0.0001,
+        "tamano_lote": 256,
+        "epocas_max": 200,
+        "paciencia": 15
+      },
+      "busqueda": {
+        "configuraciones": 40,
+        "semilla": 2026,
+        "epocas_max": 200,
+        "paciencia": 15,
+        "espacio": {
+          "capas_ocultas": [
+            [
+              16
+            ],
+            [
+              32
+            ],
+            [
+              64
+            ],
+            [
+              32,
+              16
+            ],
+            [
+              64,
+              32
+            ],
+            [
+              128,
+              64
+            ],
+            [
+              64,
+              32,
+              16
+            ]
+          ],
+          "activacion": [
+            "relu",
+            "tanh",
+            "elu"
+          ],
+          "dropout": [
+            0.0,
+            0.1,
+            0.2,
+            0.3
+          ],
+          "perdida": [
+            "bce",
+            "mse"
+          ],
+          "optimizador": [
+            "adam",
+            "sgd"
+          ],
+          "tasa_aprendizaje": {
+            "log_uniforme": [
+              0.0001,
+              0.01
+            ]
+          },
+          "penalizacion_l2": {
+            "log_uniforme": [
+              1e-06,
+              0.01
+            ]
+          },
+          "tamano_lote": [
+            128,
+            256,
+            512
+          ]
+        }
+      },
+      "semillas": {
+        "n": 30,
+        "primera": 1,
+        "configuracion": "results/red/mejor_configuracion.yaml"
+      },
+      "demo": {
+        "fraccion_entrenamiento": 0.3,
+        "epocas_max": 30,
+        "configuraciones": 4,
+        "n_semillas": 3
+      }
+    },
+    "perdida_esperada": {
+      "archivo_pd": "../intercambio/pd_prueba.csv",
+      "modelo_lgd": "red",
+      "ead": "fraccion_pendiente",
+      "resultados": "results/perdida_esperada",
+      "figuras": "figures/perdida_esperada",
+      "grupos_calibracion": 10
     }
   },
   "versiones": {

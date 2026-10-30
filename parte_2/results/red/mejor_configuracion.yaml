@@ -1,0 +1,15 @@
+capas_ocultas:
+- 64
+- 32
+- 16
+activacion: tanh
+dropout: 0.1
+perdida: bce
+optimizador: adam
+tasa_aprendizaje: 0.003653690755840811
+penalizacion_l2: 2.8916133878424343e-05
+tamano_lote: 128
+epocas_max: 200
+paciencia: 15
+elegida_por: val_rmse
+configuracion_numero: 33

@@ -334,6 +334,36 @@ def ejecutar(config: dict, muestra: float | None = None) -> dict:
         archivos[part] = {"ruta": str(ruta), "filas": len(tabla)}
 
     resumen_lgd["castigados_excluidos_por_fecha"] = int((lgd["particion"] == "excluido").sum())
+
+    # 3) Población completa con desenlace conocido (buenos y malos) de cada
+    #    conjunto, con la misma transformación. La usan el modelo de PD (parte 1)
+    #    y el cálculo de pérdida esperada. Columnas base sin escalar:
+    #      malo, castigado, funded_amnt_bruto, plazo_meses_bruto: conocidas
+    #        o derivadas de la solicitud / desenlace;
+    #      total_rec_prncp, recoveries, collection_recovery_fee, ead_default,
+    #        lgd (solo castigados): SOLO para medir la pérdida observada.
+    #        Nunca son entradas de un modelo.
+    poblacion = {}
+    for part in ["entrenamiento", "validacion", "prueba"]:
+        sub = df[(df["particion"] == part) & df["malo"].notna()].copy()
+        sub["ead_default"] = sub["funded_amnt"] - sub["total_rec_prncp"]
+        sub["lgd"] = lgd["lgd"].reindex(sub.index)  # NaN si no está castigado
+        if len(sub) == 0:
+            X = pd.DataFrame(columns=nombres, index=sub.index, dtype="float32")
+        else:
+            X = pd.DataFrame(preprocesador.transform(a_tabla_numerica(sub, config)),
+                             columns=nombres, index=sub.index).astype("float32")
+        base = sub[["id", "issue_d", "loan_status", "malo", "castigado", "funded_amnt",
+                    "plazo_meses", "total_rec_prncp", "recoveries",
+                    "collection_recovery_fee", "ead_default", "lgd"]].rename(
+            columns={"funded_amnt": "funded_amnt_bruto", "plazo_meses": "plazo_meses_bruto"})
+        base["malo"] = base["malo"].astype("int8")
+        tabla = pd.concat([base, X], axis=1).reset_index(drop=True)
+        ruta = salida / f"poblacion_{part}.parquet"
+        tabla.to_parquet(ruta, index=False)
+        poblacion[part] = {"ruta": str(ruta), "filas": len(tabla),
+                           "malos": int(base["malo"].sum())}
+
     joblib.dump(preprocesador, salida / "preprocesador.joblib")
 
     metadatos = {
@@ -345,6 +375,7 @@ def ejecutar(config: dict, muestra: float | None = None) -> dict:
         "fechas_sin_interpretar": int(df["issue_d"].isna().sum()),
         "resumen_lgd": resumen_lgd,
         "archivos": archivos,
+        "poblacion": poblacion,
         "variables_transformadas": nombres,
         "config": config,
         "versiones": {"python": platform.python_version(), "pandas": pd.__version__,
@@ -376,6 +407,9 @@ def main() -> None:
     for part, info in meta["archivos"].items():
         print(f"  {part:<13} {info['filas']:>8,} filas -> {info['ruta']}")
     print(f"  {'excluidos':<13} {r['castigados_excluidos_por_fecha']:>8,} filas (posteriores a fin_prueba)")
+    print("Población con desenlace conocido (para PD y pérdida esperada):")
+    for part, info in meta["poblacion"].items():
+        print(f"  {part:<13} {info['filas']:>8,} créditos ({info['malos']:,} malos) -> {info['ruta']}")
     print(f"Variables de entrada transformadas: {len(meta['variables_transformadas'])}")
 
 

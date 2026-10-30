@@ -2,3 +2,5 @@ data/raw/
 __pycache__/
 *.pyc
 .venv/
+parte_2/data/processed/poblacion_*.parquet
+parte_2/results/perdida_esperada/perdida_por_credito.csv

@@ -208,6 +208,12 @@ prohibidas:
 #
 # El preprocesador ajustado se guarda en data/processed/preprocesador.joblib
 # para transformar créditos nuevos (por ejemplo, en la aplicación web).
+#
+# Además de los castigados (lgd_*.parquet), se guarda la población completa
+# con desenlace conocido de cada conjunto (poblacion_*.parquet), con la misma
+# transformación y la variable 'malo'. Sirve para entrenar la PD (parte 1) con
+# el mismo preprocesamiento y para la pérdida esperada. Por tamaño no se sube
+# al repositorio (.gitignore); se regenera corriendo este preprocesamiento.
 preprocesamiento:
   imputacion_numerica: median   # median | mean. La mediana es robusta a los
                                 # valores extremos de annual_inc y revol_bal.
@@ -219,3 +225,168 @@ preprocesamiento:
   categoria_frecuencia_minima: 0.005  # categorías con menos del 0.5 % de los
                                       # créditos se agrupan en una sola
                                       # ("infrequent")
+
+
+# -----------------------------------------------------------------------------
+# LÍNEA BASE Y MODELO DE REFERENCIA (src/referencia_lgd.py)
+# -----------------------------------------------------------------------------
+# Se ajustan solo con entrenamiento y se evalúan en los tres conjuntos.
+#   nulo_media:   predice siempre el LGD promedio de entrenamiento (la mejor
+#                 constante para el RMSE). Equivale a una regresión lineal con
+#                 solo intercepto. No lo exige el enunciado: sirve para medir
+#                 cuánto aportan las variables de entrada.
+#   nulo_mediana: predice siempre la mediana de entrenamiento (la mejor
+#                 constante para el MAE).
+#   lineal:       regresión lineal por mínimos cuadrados ordinarios. Es el
+#                 modelo de baja complejidad que pide el enunciado.
+#
+# La codificación one-hot conserva todas las categorías, así que las columnas
+# de cada variable categórica suman 1 y son colineales con el intercepto.
+# Mínimos cuadrados lo resuelve (solución de norma mínima) y las predicciones
+# no se ven afectadas, pero los coeficientes individuales no se pueden
+# interpretar como efectos aislados.
+referencia:
+  resultados: results/referencia      # métricas, calibración, modelos guardados
+  figuras: figures/referencia
+  conjuntos_figuras: [validacion, prueba]
+  recortar_prediccion_lineal: false   # la regresión lineal puede predecir
+                                      # fuera de [0, 1]; false reporta el modelo
+                                      # tal cual y cuenta esos casos
+
+
+# -----------------------------------------------------------------------------
+# RED NEURONAL (src/red_lgd.py)
+# -----------------------------------------------------------------------------
+# Perceptrón multicapa con una neurona de salida y activación sigmoide, para
+# que la predicción quede en (0, 1), igual que el LGD.
+#
+# Funciones de pérdida (ambas derivables por máxima verosimilitud):
+#   bce: entropía cruzada binaria con objetivo fraccional. Cuasi-verosimilitud
+#        de Bernoulli aplicada a y en [0, 1] (fractional logit; Papke y
+#        Wooldridge, 1996). Su mínimo poblacional es E[y | x] y admite y = 0
+#        o y = 1 exactos (casi la mitad de los castigados tiene LGD = 1).
+#   mse: error cuadrático medio. Corresponde a un modelo gaussiano con media
+#        sigmoide(z).
+#
+# Regularización:
+#   - dropout en cada capa oculta;
+#   - penalización L2 aplicada como weight_decay del optimizador: se suma
+#     lambda * theta al gradiente, equivalente a sumar (lambda / 2) * ||theta||^2
+#     a la pérdida (en Adam no es lo mismo que AdamW);
+#   - parada temprana con la pérdida de validación: se detiene tras
+#     'paciencia' épocas sin mejorar y se restauran los pesos de la mejor época.
+#
+# Validación se usa para la parada temprana y para elegir la configuración en
+# la búsqueda. Prueba no interviene en ninguna decisión.
+#
+# Modos de ejecución (desde parte_2/):
+#   --modo entrenar   una configuración, una semilla (sección 'entrenar').
+#                     Para pruebas y cambios en vivo; escribe en
+#                     results/red/entrenar y no toca el modelo final.
+#   --modo busqueda   búsqueda aleatoria de hiperparámetros (sección 'busqueda');
+#                     guarda la mejor en results/red/mejor_configuracion.yaml
+#   --modo semillas   entrena la mejor configuración con n semillas y reporta
+#                     media, desviación estándar, mínimo y máximo. Guarda como
+#                     modelo final (results/red/modelo_red.pt) el de mejor
+#                     validación.
+#   --demo            reduce datos, épocas, configuraciones y semillas para una
+#                     corrida de menos de 2 min; escribe en subcarpetas 'demo'
+#
+# Orden de uso: busqueda -> semillas. Comparación justa: el número de
+# configuraciones, el tiempo total y los parámetros de cada modelo quedan en
+# busqueda_resumen.json, semillas_info.json y resumen_semillas.csv.
+red:
+  resultados: results/red
+  figuras: figures/red
+  conjuntos_figuras: [validacion, prueba]
+  metrica_seleccion: rmse        # rmse | mae, en validación; común a bce y mse
+
+  entrenar:                      # configuración del modo 'entrenar'
+    semilla: 2026
+    capas_ocultas: [64, 32]      # neuronas por capa oculta
+    activacion: relu             # relu | tanh | elu
+    dropout: 0.1
+    perdida: bce                 # bce | mse
+    optimizador: adam            # adam | sgd (SGD con momento 0.9)
+    tasa_aprendizaje: 0.001
+    penalizacion_l2: 0.0001
+    tamano_lote: 256
+    epocas_max: 200
+    paciencia: 15
+
+  busqueda:
+    configuraciones: 40          # presupuesto: número de configuraciones
+    semilla: 2026                # semilla del muestreo de configuraciones y
+                                 # del entrenamiento de cada una
+    epocas_max: 200
+    paciencia: 15
+    # Búsqueda aleatoria (Bergstra y Bengio, 2012): con el mismo presupuesto
+    # explora más valores distintos de cada hiperparámetro que una rejilla.
+    espacio:
+      capas_ocultas: [[16], [32], [64], [32, 16], [64, 32], [128, 64], [64, 32, 16]]
+      activacion: [relu, tanh, elu]
+      dropout: [0.0, 0.1, 0.2, 0.3]
+      perdida: [bce, mse]
+      optimizador: [adam, sgd]
+      tasa_aprendizaje: {log_uniforme: [0.0001, 0.01]}
+      penalizacion_l2: {log_uniforme: [0.000001, 0.01]}
+      tamano_lote: [128, 256, 512]
+
+  semillas:
+    n: 30
+    primera: 1                   # se usan las semillas 1, 2, ..., n
+    # Configuración a repetir. Si existe el archivo de la búsqueda, se usa ese;
+    # si no, se usa la sección 'entrenar'.
+    configuracion: results/red/mejor_configuracion.yaml
+
+  demo:
+    fraccion_entrenamiento: 0.3  # fracción de créditos de entrenamiento
+    epocas_max: 30
+    configuraciones: 4           # para --modo busqueda --demo
+    n_semillas: 3                # para --modo semillas --demo
+
+
+# -----------------------------------------------------------------------------
+# INTERCAMBIO CON LA PARTE 1 Y PÉRDIDA ESPERADA (src/perdida_esperada.py)
+# -----------------------------------------------------------------------------
+# La parte 1 entrega la PD de cada crédito de prueba en un CSV, con el formato
+# descrito en ../intercambio/LEEME.md:
+#   columnas obligatorias: id, pd       (pd en [0, 1])
+#   columna opcional:      modelo       (nombre del modelo que produjo la PD)
+#   filas: exactamente los créditos de data/processed/poblacion_prueba.parquet
+#          (todos los de prueba con desenlace conocido, buenos y malos)
+#
+# Mientras no exista la PD real, src/pd_provisional.py escribe en el mismo
+# archivo una PD provisional (regresión logística con las mismas entradas),
+# marcada con modelo = provisional_regresion_logistica. Cuando la parte 1
+# sobrescribe el archivo, basta volver a correr src/perdida_esperada.py.
+#
+# Pérdida esperada de cada crédito, calculada al momento de la aprobación:
+#   E[L] = PD * LGD * EAD
+#   PD:  del archivo de intercambio.
+#   LGD: predicción del modelo de esta parte. Se entrenó con castigados, pero
+#        responde "si este crédito incumpliera, qué fracción se perdería", así
+#        que se aplica a todos los créditos de prueba.
+#   EAD: según 'ead' (abajo).
+#
+# Pérdida observada, para comparar el total de E[L] en prueba:
+#   castigados:            ead_default * LGD real (dato completo).
+#   Default y Late (31-120 days): sin cobranza todavía, pérdida final
+#     desconocida. Se reporta un rango: cota inferior sin ellos, cota superior
+#     suponiendo que pierden toda su ead_default (LGD = 1).
+#   buenos: pérdida 0.
+perdida_esperada:
+  archivo_pd: ../intercambio/pd_prueba.csv
+  modelo_lgd: red               # red | lineal
+  ead: fraccion_pendiente       # monto | fraccion_pendiente
+  # monto:              EAD = funded_amnt. Supone incumplimiento inmediato;
+  #                     sobreestima la pérdida.
+  # fraccion_pendiente: EAD = funded_amnt * c, con c la fracción promedio del
+  #                     monto que seguía pendiente al incumplir, estimada en los
+  #                     castigados de ENTRENAMIENTO, separada por plazo (36 y 60
+  #                     meses), porque los créditos largos amortizan capital más
+  #                     despacio. Coherente con la definición del LGD, que se
+  #                     mide sobre la deuda pendiente al incumplir.
+  resultados: results/perdida_esperada
+  figuras: figures/perdida_esperada
+  grupos_calibracion: 10
