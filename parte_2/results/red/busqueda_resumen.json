@@ -1,6 +1,6 @@
 {
   "configuraciones_entrenadas": 40,
-  "segundos_totales": 256.88550380000015,
+  "segundos_totales": 237.53597889999992,
   "metrica_seleccion": "val_rmse",
   "mejor": {
     "capas_ocultas": [
