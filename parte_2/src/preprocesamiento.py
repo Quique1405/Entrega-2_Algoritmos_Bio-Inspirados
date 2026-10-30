@@ -169,13 +169,23 @@ def asignar_desenlace(df: pd.DataFrame, config: dict) -> pd.DataFrame:
 
 
 def asignar_particion(df: pd.DataFrame, config: dict) -> pd.DataFrame:
-    fin_ent = pd.Timestamp(config["particion"]["fin_entrenamiento"])
-    fin_val = pd.Timestamp(config["particion"]["fin_validacion"])
-    if not fin_ent < fin_val:
-        raise ValueError("fin_entrenamiento debe ser anterior a fin_validacion")
+    """
+    entrenamiento: issue_d <= fin_entrenamiento
+    validacion:    fin_entrenamiento < issue_d <= fin_validacion
+    prueba:        fin_validacion < issue_d <= fin_prueba
+    excluido:      issue_d > fin_prueba (no se usa para nada)
+    Si fin_prueba es null, todo lo posterior a fin_validacion va a prueba.
+    """
+    p = config["particion"]
+    fin_ent = pd.Timestamp(p["fin_entrenamiento"])
+    fin_val = pd.Timestamp(p["fin_validacion"])
+    fin_pru = pd.Timestamp(p["fin_prueba"]) if p.get("fin_prueba") else pd.Timestamp.max
+    if not fin_ent < fin_val < fin_pru:
+        raise ValueError("Se requiere fin_entrenamiento < fin_validacion < fin_prueba")
     df["particion"] = np.select(
-        [df["issue_d"] <= fin_ent, df["issue_d"] <= fin_val, df["issue_d"] > fin_val],
-        ["entrenamiento", "validacion", "prueba"],
+        [df["issue_d"] <= fin_ent, df["issue_d"] <= fin_val,
+         df["issue_d"] <= fin_pru, df["issue_d"] > fin_pru],
+        ["entrenamiento", "validacion", "prueba", "excluido"],
         default="sin_fecha",
     )
     return df
@@ -323,6 +333,7 @@ def ejecutar(config: dict, muestra: float | None = None) -> dict:
         tabla.to_parquet(ruta, index=False)
         archivos[part] = {"ruta": str(ruta), "filas": len(tabla)}
 
+    resumen_lgd["castigados_excluidos_por_fecha"] = int((lgd["particion"] == "excluido").sum())
     joblib.dump(preprocesador, salida / "preprocesador.joblib")
 
     metadatos = {
@@ -364,6 +375,7 @@ def main() -> None:
     print(f"LGD media {r['lgd_media']:.3f}, mediana {r['lgd_mediana']:.3f}")
     for part, info in meta["archivos"].items():
         print(f"  {part:<13} {info['filas']:>8,} filas -> {info['ruta']}")
+    print(f"  {'excluidos':<13} {r['castigados_excluidos_por_fecha']:>8,} filas (posteriores a fin_prueba)")
     print(f"Variables de entrada transformadas: {len(meta['variables_transformadas'])}")
 
 

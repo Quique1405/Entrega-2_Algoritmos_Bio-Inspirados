@@ -44,8 +44,12 @@ rutas:
 # recuperaciones (recoveries) se registran después del castigo. Los créditos
 # en Default o Late (31-120 days) son malos para el modelo de PD, pero aún no
 # tienen proceso de cobro y su LGD saldría artificialmente cercano a 1.
-# Evidencia: reports/preprocesamiento/recuperaciones_por_estado.csv
-# (fracción de créditos con recoveries > 0 por estado).
+# Evidencia (reports/preprocesamiento/recuperaciones_por_estado.csv),
+# fracción de créditos con recoveries > 0:
+#   Charged Off: 53 % de 45 248      Does not meet ... Charged Off: 64 % de 761
+#   Default:      0 % de 1 219       Late (31-120 days):             0 % de 11 591
+# El 47 % de los Charged Off no tiene ninguna recuperación: su LGD es
+# exactamente 1.
 #
 # Fórmula (campos y definiciones del diccionario de variables):
 #
@@ -71,9 +75,10 @@ rutas:
 #   - Los castigos recientes pueden no haber terminado su cobranza, lo que
 #     infla su LGD (afecta sobre todo a créditos de 2014 y 2015).
 #
-# Resultado de la corrida completa: 46 009 castigados, ninguno descartado;
+# Resultado de la corrida completa (los 46 009 castigados del archivo,
+# ninguno descartado por exposición no positiva o datos faltantes):
 # 38 casos con LGD < 0 antes de recortar y ninguno > 1; media 0.930,
-# mediana 0.981.
+# mediana 0.981. De ellos, los de 2015 quedan excluidos por la partición.
 objetivo:
   estados_malos:
     - Charged Off
@@ -96,21 +101,38 @@ objetivo:
 # Por fecha de originación (issue_d), fechas inclusivas:
 #   entrenamiento: issue_d <= fin_entrenamiento
 #   validación:    fin_entrenamiento < issue_d <= fin_validacion
-#   prueba:        issue_d > fin_validacion
+#   prueba:        fin_validacion < issue_d <= fin_prueba
+#   excluido:      issue_d > fin_prueba (no se usa en ningún ajuste ni
+#                  evaluación)
 #
 # Simula el uso real: el modelo aprende de créditos antiguos y se evalúa en
 # créditos posteriores. La misma partición aplica a PD y LGD, para que la
 # pérdida esperada E[L] = PD * LGD * EAD combine predicciones del mismo
 # crédito en el mismo conjunto.
 #
-# ESTADO: provisional. Con estos cortes, los castigados quedan
-# 29 255 / 13 981 / 2 773 (64 % / 30 % / 6 %). Prueba queda pequeña y
-# posiblemente sesgada: en 2015 casi todos los créditos seguían vigentes y los
-# pocos castigados son los que fallaron muy rápido. Pendiente de revisión con
-# reports/preprocesamiento/conteos_por_anio.csv.
+# Decisión: entrenamiento 2007-2012, validación 2013, prueba 2014, y 2015
+# excluido. Motivo: censura. Los datos se recogieron antes de que terminaran
+# muchos créditos, y la fracción de créditos sin desenlace conocido crece
+# con el año de originación:
+#   2007-2012: 3 %    2013: 46 %    2014: 69 %    2015: 93 %
+# En 2015, los pocos créditos con desenlace son sobre todo los que fallaron muy
+# rápido: su tasa de malos está inflada, y sus castigos son tan recientes que
+# la cobranza probablemente no había terminado (LGD inflado). 2014 también
+# tiene censura importante; queda como limitación.
+# Fuente: reports/preprocesamiento/conteos_por_anio.csv.
+#
+# Resultado esperado con estos cortes:
+#   castigados (LGD): 14 419 / 14 836 / 13 981, y 2 773 excluidos
+#   con desenlace conocido en entrenamiento: 90 347 (75 618 buenos, 14 729 malos)
+#
+# Alternativa descartada: entrenamiento hasta 2013 y 2014 partido en
+# validación y prueba. Da más datos de entrenamiento (29 255 castigados), pero
+# validación y prueba saldrían del año con más censura después de 2015.
 particion:
-  fin_entrenamiento: "2013-12-31"   # entre comillas: sin ellas YAML lo
-  fin_validacion: "2014-12-31"      # convierte en objeto fecha
+  fin_entrenamiento: "2012-12-31"   # entre comillas: sin ellas YAML lo
+  fin_validacion: "2013-12-31"      # convierte en objeto fecha
+  fin_prueba: "2014-12-31"          # null = todo lo posterior a fin_validacion
+                                    # va a prueba
 
 
 # -----------------------------------------------------------------------------
@@ -180,7 +202,7 @@ prohibidas:
 # -----------------------------------------------------------------------------
 # Los parámetros (medianas, medias, desviaciones estándar, categorías
 # frecuentes) se ajustan con TODOS los créditos de entrenamiento con desenlace
-# conocido (buenos y malos; 163 541 en la corrida completa), no solo con los
+# conocido (buenos y malos; 90 347 con la partición actual), no solo con los
 # castigados. Así PD y LGD comparten exactamente la misma transformación de
 # cada crédito. Validación y prueba nunca intervienen en el ajuste.
 #

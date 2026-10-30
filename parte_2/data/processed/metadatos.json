@@ -1,8 +1,8 @@
 {
-  "creado_utc": "2026-10-30T04:42:48+00:00",
+  "creado_utc": "2026-10-30T05:17:17+00:00",
   "muestra": null,
   "filas_leidas": 887379,
-  "filas_ajuste_preprocesador": 163541,
+  "filas_ajuste_preprocesador": 90347,
   "periodo_originacion": [
     "2007-06-01",
     "2015-12-01"
@@ -17,20 +17,21 @@
     "lgd_mayor_que_max": 0,
     "lgd_igual_a_1": 21332,
     "lgd_media": 0.9296273676118955,
-    "lgd_mediana": 0.9813102760226139
+    "lgd_mediana": 0.9813102760226139,
+    "castigados_excluidos_por_fecha": 2773
   },
   "archivos": {
     "entrenamiento": {
       "ruta": "data\\processed\\lgd_entrenamiento.parquet",
-      "filas": 29255
+      "filas": 14419
     },
     "validacion": {
       "ruta": "data\\processed\\lgd_validacion.parquet",
-      "filas": 13981
+      "filas": 14836
     },
     "prueba": {
       "ruta": "data\\processed\\lgd_prueba.parquet",
-      "filas": 2773
+      "filas": 13981
     }
   },
   "variables_transformadas": [
@@ -117,8 +118,9 @@
       ]
     },
     "particion": {
-      "fin_entrenamiento": "2013-12-31",
-      "fin_validacion": "2014-12-31"
+      "fin_entrenamiento": "2012-12-31",
+      "fin_validacion": "2013-12-31",
+      "fin_prueba": "2014-12-31"
     },
     "variables": {
       "numericas": [

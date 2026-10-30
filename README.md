@@ -89,17 +89,31 @@ Para que esa multiplicación tenga sentido, los dos modelos deben describir y pa
 
 La pérdida esperada se estima **al momento de aprobar el crédito**. Por eso solo se usan como entradas variables conocidas en la solicitud o la aprobación.
 
-### Partición temporal (provisional)
+### Partición temporal
 
 La partición se hace por fecha de originación (`issue_d`), con fechas inclusivas:
 
-| Conjunto | Créditos |
-|---|---|
-| Entrenamiento | `issue_d` ≤ 2013-12-31 |
-| Validación | 2014-01-01 a 2014-12-31 |
-| Prueba | `issue_d` ≥ 2015-01-01 |
+| Conjunto | Años | Castigados (LGD) |
+|---|---|---:|
+| Entrenamiento | 2007–2012 | 14 419 |
+| Validación | 2013 | 14 836 |
+| Prueba | 2014 | 13 981 |
+| Excluido | 2015 | 2 773 |
 
-**Pendiente de revisión.** Con estos cortes, prueba queda con solo el 6 % de los créditos castigados. En 2015 casi todos los créditos seguían vigentes cuando se recogieron los datos, y los pocos castigados son los que fallaron muy rápido, lo que probablemente sesga los resultados. La decisión se tomará con `parte_2/reports/preprocesamiento/conteos_por_anio.csv`.
+**Motivo: censura.** Los datos se recogieron antes de que terminaran muchos créditos, así que no se observa su desenlace final. La fracción de créditos sin desenlace conocido crece con el año de originación:
+
+| Años | Sin desenlace conocido |
+|---|---:|
+| 2007–2012 | 3 % |
+| 2013 | 46 % |
+| 2014 | 69 % |
+| 2015 | 93 % |
+
+En 2015, los pocos créditos con desenlace son sobre todo los que fallaron muy rápido. Por eso su tasa de malos está inflada, y sus castigos son tan recientes que la cobranza probablemente no había terminado, lo que también infla su LGD. Por estas razones 2015 se excluye de todo ajuste y evaluación. 2014 también tiene censura importante, y eso queda como limitación.
+
+Fuente: `parte_2/reports/preprocesamiento/conteos_por_anio.csv`.
+
+**Alternativa descartada:** entrenamiento hasta 2013 y 2014 partido en validación y prueba. Da más datos de entrenamiento (29 255 castigados), pero validación y prueba saldrían del año con más censura después de 2015.
 
 ### Variables de entrada
 
@@ -121,7 +135,7 @@ La lista está en `parte_2/configs/lgd.yaml`, sección `variables`:
 - **Faltantes numéricos:** se imputan con la mediana y se agrega un indicador 0/1 de "era faltante".
 - **Escalado:** estandarización, con media 0 y desviación estándar 1.
 - **Categóricas:** codificación *one-hot*, es decir, una columna 0/1 por categoría. Las categorías con menos del 0.5 % de los créditos se agrupan en una sola.
-- **Ajuste:** los parámetros (medianas, medias, desviaciones y categorías) se ajustan con **todos los créditos de entrenamiento con desenlace conocido**, buenos y malos: 163 541 en total. Validación y prueba no intervienen en el ajuste.
+- **Ajuste:** los parámetros (medianas, medias, desviaciones y categorías) se ajustan con **todos los créditos de entrenamiento con desenlace conocido**, buenos y malos: 90 347 en total (75 618 buenos y 14 729 malos). Validación y prueba no intervienen en el ajuste.
 
 El preprocesador ajustado está en `parte_2/data/processed/preprocesador.joblib`. Se puede cargar con `joblib.load` y aplicar con `.transform(...)` para obtener exactamente las mismas 54 variables transformadas en la parte 1. Las funciones `limpiar` y `a_tabla_numerica` de `parte_2/src/preprocesamiento.py` preparan el `DataFrame` antes de transformarlo.
 
@@ -156,20 +170,28 @@ No se usa `out_prncp` (saldo pendiente) como denominador, porque vale 0 después
 
 ### Qué créditos se usan
 
-Solo los **castigados** (`Charged Off` y `Does not meet the credit policy. Status:Charged Off`): créditos declarados incobrables y enviados a cobranza. Las recuperaciones se registran después del castigo. Los créditos en `Default` o `Late (31-120 days)` cuentan como malos para la PD, pero todavía no tienen proceso de cobro, y su LGD saldría artificialmente cercano a 1. La evidencia está en `parte_2/reports/preprocesamiento/recuperaciones_por_estado.csv`.
+Solo los **castigados** (`Charged Off` y `Does not meet the credit policy. Status:Charged Off`): créditos declarados incobrables y enviados a cobranza. Las recuperaciones se registran después del castigo. Los créditos en `Default` o `Late (31-120 days)` cuentan como malos para la PD, pero todavía no tienen proceso de cobro, y su LGD saldría igual a 1 por construcción.
+
+| Estado | Créditos | Con alguna recuperación |
+|---|---:|---:|
+| `Charged Off` | 45 248 | 53 % |
+| `Does not meet the credit policy. Status:Charged Off` | 761 | 64 % |
+| `Default` | 1 219 | 0 % |
+| `Late (31-120 days)` | 11 591 | 0 % |
+
+Fuente: `parte_2/reports/preprocesamiento/recuperaciones_por_estado.csv`.
 
 ### Resultados del preprocesamiento
 
-- **Créditos usados:** 46 009 castigados, ninguno descartado.
+- **Créditos castigados en el archivo:** 46 009, ninguno descartado por exposición no positiva ni por datos faltantes. Los 2 773 de 2015 quedan fuera por la partición.
 - **Recorte:** 38 casos con LGD menor que 0 se llevaron a 0; ninguno era mayor que 1.
-- **Distribución:** media 0.930 y mediana 0.981. En la mitad de los créditos castigados se perdió más del 98 % de la deuda pendiente. Los créditos de Lending Club no tienen garantía, así que se recupera poco.
-- **Créditos castigados por conjunto**, con la partición provisional: 29 255 en entrenamiento, 13 981 en validación y 2 773 en prueba.
+- **Distribución** (sobre los 46 009): media 0.930 y mediana 0.981. El 47 % de los `Charged Off` no tiene ninguna recuperación, así que su LGD es exactamente 1: la distribución acumula casi la mitad de los créditos en ese valor. Los créditos de Lending Club no tienen garantía, así que se recupera poco.
 
 ### Limitaciones de la variable objetivo
 
 - No hay fechas de las recuperaciones, así que no se pueden descontar en el tiempo.
 - No se incluyen intereses no cobrados ni costos internos de cobranza.
-- Los créditos castigados poco antes de recoger los datos pueden no haber terminado su cobranza, lo que infla su LGD.
+- Los créditos castigados poco antes de recoger los datos pueden no haber terminado su cobranza, lo que infla su LGD. Por eso se excluye 2015; 2014 sigue parcialmente afectado.
 
 ### Plan de modelamiento
 
@@ -190,7 +212,7 @@ Solo los **castigados** (`Charged Off` y `Does not meet the credit policy. Statu
 
 ## Pendientes
 
-- [ ] Fijar las fechas de corte de la partición temporal.
+- [x] Fijar las fechas de corte de la partición temporal.
 - [ ] Confirmar si `grade` e `int_rate` se mantienen como variables de entrada.
 - [ ] Acordar el archivo de intercambio de PD (`id`, `pd`).
 

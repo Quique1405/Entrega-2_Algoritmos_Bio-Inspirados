@@ -1,4 +1,5 @@
 particion,bueno,desenlace_desconocido,malo,castigados_para_lgd
-entrenamiento,132014,67116,31527,29255
-prueba,22984,390259,7851,2773
-validacion,54713,161474,19441,13981
+entrenamiento,75618,5555,14729,14419
+excluido,22984,390259,7851,2773
+prueba,54713,161474,19441,13981
+validacion,56396,61561,16798,14836
