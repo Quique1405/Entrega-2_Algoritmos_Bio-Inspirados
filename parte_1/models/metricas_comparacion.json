@@ -1,0 +1,44 @@
+{
+  "modelo_referencia": {
+    "nombre": "Regresi\u00f3n Log\u00edstica",
+    "parametros": 55,
+    "tiempo_segundos": 1.3665082454681396,
+    "metricas_validacion": {
+      "AUC": 0.6820300183078513,
+      "Gini": 0.3640600366157025,
+      "KS": 0.2660835538152422,
+      "Brier": 0.16620290132835416
+    },
+    "metricas_prueba": {
+      "AUC": 0.6818488220174961,
+      "Gini": 0.36369764403499216,
+      "KS": 0.26477477552120926,
+      "Brier": 0.18321250945364753
+    }
+  },
+  "red_neuronal": {
+    "nombre": "Perceptr\u00f3n Multicapa (MLP)",
+    "arquitectura": [
+      54,
+      64,
+      32,
+      1
+    ],
+    "parametros": 5633,
+    "epocas": 25,
+    "tiempo_segundos": 13.738476991653442,
+    "metricas_validacion": {
+      "AUC": 0.6827494094390659,
+      "Gini": 0.36549881887813185,
+      "KS": 0.26566351666211907,
+      "Brier": 0.1664920481751695
+    },
+    "metricas_prueba": {
+      "AUC": 0.6802842300861902,
+      "Gini": 0.3605684601723804,
+      "KS": 0.26150197736117126,
+      "Brier": 0.18470129259378393
+    }
+  },
+  "mejor_modelo": "MLP"
+}

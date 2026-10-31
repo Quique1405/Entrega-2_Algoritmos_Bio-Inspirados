@@ -1,0 +1,91 @@
+# =============================================================================
+# PARTE 1 - PROBABILIDAD DE INCUMPLIMIENTO (PD)
+# Configuración del preprocesamiento
+# =============================================================================
+#
+# Uso (desde la carpeta parte_1/):
+#   python -m src.preprocesamiento --config configs/pd.yaml
+#
+# Modo demostración (< 2 minutos para sustentación):
+#   python -m src.preprocesamiento --config configs/pd.yaml --muestra 0.1
+# =============================================================================
+
+semilla: 2026
+
+rutas:
+  datos_crudos: ../data/raw/loan.csv
+  salida: data/processed              # pd_{entrenamiento,validacion,prueba}.parquet
+  reportes: reports/preprocesamiento  # tablas de verificación en CSV
+  preprocesador_compartido: ../parte_2/data/processed/preprocesador.joblib
+
+# -----------------------------------------------------------------------------
+# VARIABLE OBJETIVO (CLASIFICACIÓN BINARIA)
+# -----------------------------------------------------------------------------
+objetivo:
+  estados_malos:
+    - Charged Off
+    - Default
+    - Late (31-120 days)
+    - "Does not meet the credit policy. Status:Charged Off"
+  estados_buenos:
+    - Fully Paid
+    - "Does not meet the credit policy. Status:Fully Paid"
+
+# -----------------------------------------------------------------------------
+# PARTICIÓN TEMPORAL
+# -----------------------------------------------------------------------------
+particion:
+  fin_entrenamiento: "2012-12-31"
+  fin_validacion: "2013-12-31"
+  fin_prueba: "2014-12-31"
+
+# -----------------------------------------------------------------------------
+# VARIABLES DE ENTRADA (MISMAS 54 VARIABLES COMPARTIDAS)
+# -----------------------------------------------------------------------------
+variables:
+  numericas:
+    - loan_amnt
+    - funded_amnt
+    - int_rate
+    - installment
+    - annual_inc
+    - dti
+    - delinq_2yrs
+    - inq_last_6mths
+    - open_acc
+    - pub_rec
+    - revol_bal
+    - revol_util
+    - total_acc
+    - plazo_meses
+    - antiguedad_empleo
+    - meses_historial_credito
+  categoricas:
+    - grade
+    - home_ownership
+    - verification_status
+    - purpose
+    - initial_list_status
+
+prohibidas:
+  - loan_status
+  - out_prncp
+  - out_prncp_inv
+  - total_pymnt
+  - total_pymnt_inv
+  - total_rec_prncp
+  - total_rec_int
+  - total_rec_late_fee
+  - recoveries
+  - collection_recovery_fee
+  - last_pymnt_d
+  - last_pymnt_amnt
+  - next_pymnt_d
+  - last_credit_pull_d
+
+preprocesamiento:
+  imputacion_numerica: median
+  indicador_faltante: true
+  escalado: estandar
+  categoria_frecuencia_minima: 0.005
+

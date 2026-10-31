@@ -1,0 +1,172 @@
+{
+  "creado_utc": "2026-10-31T00:09:45+00:00",
+  "muestra": null,
+  "filas_totales_leidas": 887379,
+  "creditos_con_desenlace": 268530,
+  "creditos_sin_desenlace": 618849,
+  "periodo_originacion": [
+    "2007-06-01",
+    "2015-12-01"
+  ],
+  "archivos": {
+    "entrenamiento": {
+      "ruta": "data\\processed\\pd_entrenamiento.parquet",
+      "filas": 90347,
+      "buenos": 75618,
+      "malos": 14729,
+      "tasa_malos": 0.16302699591574707
+    },
+    "validacion": {
+      "ruta": "data\\processed\\pd_validacion.parquet",
+      "filas": 73194,
+      "buenos": 56396,
+      "malos": 16798,
+      "tasa_malos": 0.22949968576659288
+    },
+    "prueba": {
+      "ruta": "data\\processed\\pd_prueba.parquet",
+      "filas": 74154,
+      "buenos": 54713,
+      "malos": 19441,
+      "tasa_malos": 0.26217061790328233
+    }
+  },
+  "variables_transformadas": [
+    "num__loan_amnt",
+    "num__funded_amnt",
+    "num__int_rate",
+    "num__installment",
+    "num__annual_inc",
+    "num__dti",
+    "num__delinq_2yrs",
+    "num__inq_last_6mths",
+    "num__open_acc",
+    "num__pub_rec",
+    "num__revol_bal",
+    "num__revol_util",
+    "num__total_acc",
+    "num__plazo_meses",
+    "num__antiguedad_empleo",
+    "num__meses_historial_credito",
+    "num__missingindicator_annual_inc",
+    "num__missingindicator_delinq_2yrs",
+    "num__missingindicator_inq_last_6mths",
+    "num__missingindicator_open_acc",
+    "num__missingindicator_pub_rec",
+    "num__missingindicator_revol_util",
+    "num__missingindicator_total_acc",
+    "num__missingindicator_antiguedad_empleo",
+    "num__missingindicator_meses_historial_credito",
+    "cat__grade_A",
+    "cat__grade_B",
+    "cat__grade_C",
+    "cat__grade_D",
+    "cat__grade_E",
+    "cat__grade_F",
+    "cat__grade_G",
+    "cat__home_ownership_MORTGAGE",
+    "cat__home_ownership_OWN",
+    "cat__home_ownership_RENT",
+    "cat__home_ownership_infrequent_sklearn",
+    "cat__verification_status_Not Verified",
+    "cat__verification_status_Source Verified",
+    "cat__verification_status_Verified",
+    "cat__purpose_car",
+    "cat__purpose_credit_card",
+    "cat__purpose_debt_consolidation",
+    "cat__purpose_home_improvement",
+    "cat__purpose_house",
+    "cat__purpose_major_purchase",
+    "cat__purpose_medical",
+    "cat__purpose_moving",
+    "cat__purpose_other",
+    "cat__purpose_small_business",
+    "cat__purpose_vacation",
+    "cat__purpose_wedding",
+    "cat__purpose_infrequent_sklearn",
+    "cat__initial_list_status_f",
+    "cat__initial_list_status_w"
+  ],
+  "total_variables_transformadas": 54,
+  "config": {
+    "semilla": 2026,
+    "rutas": {
+      "datos_crudos": "../data/raw/loan.csv",
+      "salida": "data/processed",
+      "reportes": "reports/preprocesamiento",
+      "preprocesador_compartido": "../parte_2/data/processed/preprocesador.joblib"
+    },
+    "objetivo": {
+      "estados_malos": [
+        "Charged Off",
+        "Default",
+        "Late (31-120 days)",
+        "Does not meet the credit policy. Status:Charged Off"
+      ],
+      "estados_buenos": [
+        "Fully Paid",
+        "Does not meet the credit policy. Status:Fully Paid"
+      ]
+    },
+    "particion": {
+      "fin_entrenamiento": "2012-12-31",
+      "fin_validacion": "2013-12-31",
+      "fin_prueba": "2014-12-31"
+    },
+    "variables": {
+      "numericas": [
+        "loan_amnt",
+        "funded_amnt",
+        "int_rate",
+        "installment",
+        "annual_inc",
+        "dti",
+        "delinq_2yrs",
+        "inq_last_6mths",
+        "open_acc",
+        "pub_rec",
+        "revol_bal",
+        "revol_util",
+        "total_acc",
+        "plazo_meses",
+        "antiguedad_empleo",
+        "meses_historial_credito"
+      ],
+      "categoricas": [
+        "grade",
+        "home_ownership",
+        "verification_status",
+        "purpose",
+        "initial_list_status"
+      ]
+    },
+    "prohibidas": [
+      "loan_status",
+      "out_prncp",
+      "out_prncp_inv",
+      "total_pymnt",
+      "total_pymnt_inv",
+      "total_rec_prncp",
+      "total_rec_int",
+      "total_rec_late_fee",
+      "recoveries",
+      "collection_recovery_fee",
+      "last_pymnt_d",
+      "last_pymnt_amnt",
+      "next_pymnt_d",
+      "last_credit_pull_d"
+    ],
+    "preprocesamiento": {
+      "imputacion_numerica": "median",
+      "indicador_faltante": true,
+      "escalado": "estandar",
+      "categoria_frecuencia_minima": 0.005
+    }
+  },
+  "versiones": {
+    "python": "3.12.2",
+    "pandas": "3.0.5",
+    "numpy": "2.5.3",
+    "scikit-learn": "1.9.1"
+  }
+}
